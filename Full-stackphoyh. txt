@@ -1,0 +1,181 @@
+
+from flask import Flask, render_template_string, request, redirect
+import sqlite3
+
+app = Flask(__name__)
+
+# Database connection
+def get_db():
+    conn = sqlite3.connect("tasks.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# Create database
+def create_database():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            completed INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Website design
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Python Task Manager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial;
+            background: #eef2ff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 550px;
+            margin: 30px auto;
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px #0002;
+        }
+        h1 {
+            text-align: center;
+            color: #4338ca;
+        }
+        form {
+            display: flex;
+            gap: 8px;
+        }
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 7px;
+        }
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 7px;
+            background: #4f46e5;
+            color: white;
+            cursor: pointer;
+        }
+        .task {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            background: #f3f4f6;
+            margin-top: 12px;
+            border-radius: 8px;
+        }
+        .done {
+            text-decoration: line-through;
+            color: gray;
+        }
+        .delete {
+            background: #dc2626;
+        }
+        a {
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <h1>My Task Manager</h1>
+    <p>Organize your daily tasks easily!</p>
+
+    <form action="/add" method="POST">
+        <input type="text" name="title"
+               placeholder="Enter your task..." required>
+        <button type="submit">Add</button>
+    </form>
+
+    <h3>My Tasks</h3>
+
+    {% for task in tasks %}
+    <div class="task">
+        <span class="{{ 'done' if task['completed'] else '' }}">
+            {{ task['title'] }}
+        </span>
+
+        <div>
+            <a href="/complete/{{ task['id'] }}">
+                <button>
+                    {{ 'Undo' if task['completed'] else 'Done' }}
+                </button>
+            </a>
+
+            <a href="/delete/{{ task['id'] }}">
+                <button class="delete">Delete</button>
+            </a>
+        </div>
+    </div>
+    {% else %}
+        <p>No tasks available. Add your first task!</p>
+    {% endfor %}
+
+</div>
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    conn = get_db()
+    tasks = conn.execute(
+        "SELECT * FROM tasks ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    return render_template_string(HTML, tasks=tasks)
+
+@app.route("/add", methods=["POST"])
+def add():
+    title = request.form.get("title", "").strip()
+
+    if title:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO tasks (title) VALUES (?)",
+            (title,)
+        )
+        conn.commit()
+        conn.close()
+
+    return redirect("/")
+
+@app.route("/complete/<int:task_id>")
+def complete(task_id):
+    conn = get_db()
+    conn.execute(
+        "UPDATE tasks SET completed = 1 - completed WHERE id = ?",
+        (task_id,)
+    )
+    conn.commit()
+    conn.close()
+    return redirect("/")
+
+@app.route("/delete/<int:task_id>")
+def delete(task_id):
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM tasks WHERE id = ?",
+        (task_id,)
+    )
+    conn.commit()
+    conn.close()
+    return redirect("/")
+
+if __name__ == "__main__":
+    create_database()
+    app.run(host="0.0.0.0", port=5000)
