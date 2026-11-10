@@ -1,0 +1,254 @@
+streamlit run app.py
+
+
+import streamlit as st
+import pandas as pd
+from datetime import date, time
+
+# Page Configuration
+st.set_page_config(
+    page_title="Social Media Automation",
+    page_icon="📱",
+    layout="wide"
+)
+
+# Custom Design
+st.markdown("""
+<style>
+.stApp {
+    background-color: #10131b;
+    color: white;
+}
+h1, h2, h3 {
+    color: #00d4ff;
+}
+[data-testid="stMetric"] {
+    background-color: #202638;
+    padding: 15px;
+    border-radius: 12px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Session Storage
+if "posts" not in st.session_state:
+    st.session_state.posts = []
+
+# Header
+st.title("📱 Social Media Automation")
+st.caption("Create captions | Generate hashtags | Plan your posts")
+
+# Sidebar
+st.sidebar.title("⚙️ Settings")
+
+platform = st.sidebar.selectbox(
+    "Select Platform",
+    ["Instagram", "Facebook", "LinkedIn", "Twitter", "YouTube"]
+)
+
+tone = st.sidebar.selectbox(
+    "Caption Style",
+    ["Friendly", "Professional", "Funny", "Motivational", "Simple"]
+)
+
+# Dashboard Metrics
+st.subheader("📊 Dashboard Overview")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Total Posts", len(st.session_state.posts))
+col2.metric("Platforms", "5")
+col3.metric("Status", "Active")
+
+st.divider()
+
+# Tabs
+tab1, tab2, tab3 = st.tabs([
+    "✍️ Caption Generator",
+    "🏷️ Hashtag Generator",
+    "📅 Content Planner"
+])
+
+# Caption Generator
+with tab1:
+
+    st.subheader("Create Social Media Caption")
+
+    topic = st.text_input(
+        "Enter your post topic",
+        placeholder="Example: Gym Motivation"
+    )
+
+    audience = st.text_input(
+        "Target Audience",
+        placeholder="Example: Fitness Lovers"
+    )
+
+    if st.button("Generate Caption"):
+
+        if topic.strip() == "":
+            st.warning("Please enter a topic.")
+
+        else:
+
+            opening = {
+                "Friendly": "Hey everyone! 👋",
+                "Professional": "Here is something important:",
+                "Funny": "Life is better with a little fun! 😎",
+                "Motivational": "Never stop believing in yourself! 🔥",
+                "Simple": "Small steps, big dreams."
+            }
+
+            caption = (
+                opening[tone] + "\n\n"
+                + topic + "\n\n"
+                + "Made for " + audience + "\n\n"
+                + "Follow for more updates! ❤️"
+            )
+
+            st.session_state.caption = caption
+
+    if "caption" in st.session_state:
+
+        st.text_area(
+            "Generated Caption",
+            st.session_state.caption,
+            height=150
+        )
+
+        st.download_button(
+            "Download Caption",
+            st.session_state.caption,
+            file_name="caption.txt"
+        )
+
+# Hashtag Generator
+with tab2:
+
+    st.subheader("Hashtag Generator")
+
+    keywords = st.text_input(
+        "Enter keywords",
+        placeholder="fitness gym motivation"
+    )
+
+    if st.button("Generate Hashtags"):
+
+        if keywords.strip():
+
+            words = keywords.lower().split()
+
+            hashtags = [
+                "#" + word.replace("#", "")
+                for word in words
+            ]
+
+            hashtags += [
+                "#socialmedia",
+                "#contentcreator",
+                "#trending",
+                "#dailyupdates"
+            ]
+
+            hashtags = list(dict.fromkeys(hashtags))
+
+            st.success("Your Hashtags are Ready!")
+
+            st.code(" ".join(hashtags))
+
+        else:
+            st.warning("Please enter keywords.")
+
+# Content Planner
+with tab3:
+
+    st.subheader("📅 Schedule Your Content")
+
+    with st.form("post_form"):
+
+        post_title = st.text_input("Post Title")
+
+        post_platform = st.selectbox(
+            "Choose Platform",
+            ["Instagram", "Facebook", "LinkedIn", "Twitter", "YouTube"]
+        )
+
+        post_date = st.date_input(
+            "Select Date",
+            value=date.today()
+        )
+
+        post_time = st.time_input(
+            "Select Time",
+            value=time(18, 0)
+        )
+
+        post_caption = st.text_area("Write Your Caption")
+
+        submit = st.form_submit_button("Add Post")
+
+    if submit:
+
+        if not post_title.strip():
+
+            st.error("Please enter post title.")
+
+        else:
+
+            st.session_state.posts.append({
+                "Title": post_title,
+                "Platform": post_platform,
+                "Date": str(post_date),
+                "Time": str(post_time),
+                "Caption": post_caption,
+                "Status": "Planned"
+            })
+
+            st.success("Post Added Successfully!")
+
+    st.divider()
+
+    st.subheader("📋 Your Posting Queue")
+
+    if st.session_state.posts:
+
+        df = pd.DataFrame(st.session_state.posts)
+
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.download_button(
+            "Download Post Calendar",
+            df.to_csv(index=False).encode("utf-8"),
+            file_name="content_calendar.csv",
+            mime="text/csv"
+        )
+
+        if st.button("Clear All Posts"):
+
+            st.session_state.posts = []
+
+            st.rerun()
+
+    else:
+
+        st.info("No posts added yet.")
+
+# Footer
+st.divider()
+
+st.markdown(
+    "### 🚀 Social Media Automation Project"
+)
+
+st.caption(
+    "Developed using Python and Streamlit | Internship Project"
+)
+
+st.caption(
+    "Note: This application plans and prepares content. "
+    "It does not automatically publish posts to social media."
+)
