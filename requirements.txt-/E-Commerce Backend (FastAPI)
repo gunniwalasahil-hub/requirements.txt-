@@ -1,0 +1,203 @@
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import sqlite3
+
+app = FastAPI(
+    title="E-Commerce Backend API",
+    description="Python FastAPI E-Commerce Project",
+    version="1.0"
+)
+
+# Database connection
+def get_db():
+    conn = sqlite3.connect("ecommerce.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# Create database tables
+def create_tables():
+    conn = get_db()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            stock INTEGER DEFAULT 0
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name TEXT NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            total_price REAL NOT NULL
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+create_tables()
+
+# Product model
+class Product(BaseModel):
+    name: str
+    price: float
+    stock: int
+
+# Order model
+class Order(BaseModel):
+    customer_name: str
+    product_id: int
+    quantity: int
+
+# Home API
+@app.get("/")
+def home():
+    return {
+        "message": "Welcome to E-Commerce Backend API",
+        "docs": "/docs"
+    }
+
+# Add product
+@app.post("/products")
+def add_product(product: Product):
+    if product.price < 0 or product.stock < 0:
+        raise HTTPException(400, "Price and stock cannot be negative")
+
+    conn = get_db()
+    cursor = conn.execute(
+        "INSERT INTO products (name, price, stock) VALUES (?, ?, ?)",
+        (product.name, product.price, product.stock)
+    )
+    conn.commit()
+    product_id = cursor.lastrowid
+    conn.close()
+
+    return {"message": "Product added successfully", "id": product_id}
+
+# Get all products
+@app.get("/products")
+def get_products():
+    conn = get_db()
+    products = conn.execute(
+        "SELECT * FROM products"
+    ).fetchall()
+    conn.close()
+
+    return [dict(p) for p in products]
+
+# Get product by ID
+@app.get("/products/{product_id}")
+def get_product(product_id: int):
+    conn = get_db()
+    product = conn.execute(
+        "SELECT * FROM products WHERE id = ?",
+        (product_id,)
+    ).fetchone()
+    conn.close()
+
+    if product is None:
+        raise HTTPException(404, "Product not found")
+
+    return dict(product)
+
+# Update product
+@app.put("/products/{product_id}")
+def update_product(product_id: int, product: Product):
+    if product.price < 0 or product.stock < 0:
+        raise HTTPException(400, "Price and stock cannot be negative")
+
+    conn = get_db()
+
+    cursor = conn.execute(
+        """UPDATE products
+           SET name = ?, price = ?, stock = ?
+           WHERE id = ?""",
+        (product.name, product.price, product.stock, product_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(404, "Product not found")
+
+    return {"message": "Product updated successfully"}
+
+# Delete product
+@app.delete("/products/{product_id}")
+def delete_product(product_id: int):
+    conn = get_db()
+    cursor = conn.execute(
+        "DELETE FROM products WHERE id = ?",
+        (product_id,)
+    )
+    conn.commit()
+    conn.close()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(404, "Product not found")
+
+    return {"message": "Product deleted successfully"}
+
+# Create order
+@app.post("/orders")
+def create_order(order: Order):
+    if order.quantity <= 0:
+        raise HTTPException(400, "Quantity must be greater than zero")
+
+    conn = get_db()
+
+    product = conn.execute(
+        "SELECT * FROM products WHERE id = ?",
+        (order.product_id,)
+    ).fetchone()
+
+    if product is None:
+        conn.close()
+        raise HTTPException(404, "Product not found")
+
+    if product["stock"] < order.quantity:
+        conn.close()
+        raise HTTPException(400, "Insufficient stock")
+
+    total = product["price"] * order.quantity
+
+    conn.execute(
+        "UPDATE products SET stock = stock - ? WHERE id = ?",
+        (order.quantity, order.product_id)
+    )
+
+    cursor = conn.execute(
+        """INSERT INTO orders
+           (customer_name, product_id, quantity, total_price)
+           VALUES (?, ?, ?, ?)""",
+        (order.customer_name, order.product_id,
+         order.quantity, total)
+    )
+
+    conn.commit()
+    order_id = cursor.lastrowid
+    conn.close()
+
+    return {
+        "message": "Order created successfully",
+        "order_id": order_id,
+        "total_price": total
+    }
+
+# View all orders
+@app.get("/orders")
+def get_orders():
+    conn = get_db()
+    orders = conn.execute(
+        "SELECT * FROM orders"
+    ).fetchall()
+    conn.close()
+
+    return [dict(o) for o in orders]
